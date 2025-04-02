@@ -1,4 +1,4 @@
-# AI-Powered Clothing Comparator
+# ShopSphere - AI-Powered Clothing Comparator
 
 A cross-platform web application that scrapes clothing data from multiple e-commerce sites, normalizes the data, and presents it in a unified interface for comparison.
 
