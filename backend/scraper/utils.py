@@ -19,11 +19,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Increase timeout values
-DEFAULT_TIMEOUT = 30  # seconds
-PAGE_LOAD_TIMEOUT = 40  # seconds
-SCROLL_WAIT_TIME = 5  # seconds
+DEFAULT_TIMEOUT = 60  # seconds
+PAGE_LOAD_TIMEOUT = 90  # seconds
+SCROLL_WAIT_TIME = 3  # seconds
 MAX_RETRIES = 3  # Number of retries for failed scraping attempts
-MAX_CONCURRENT_SCRAPERS = 5  # Maximum number of concurrent scrapers
+MAX_CONCURRENT_SCRAPERS = 4  # Reduced to prevent overload
 
 def setup_driver():
     """Set up and return a configured Selenium WebDriver."""
@@ -34,19 +34,38 @@ def setup_driver():
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--window-size=1920,1080')
     options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_argument('--disable-notifications')
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--disable-popup-blocking')
+    options.add_argument('--start-maximized')
+    options.add_argument('--incognito')
+    
+    # Additional performance options
+    prefs = {
+        'profile.default_content_setting_values.notifications': 2,
+        'profile.default_content_setting_values.images': 1,
+        'disk-cache-size': 4096,
+        'profile.default_content_settings.popups': 0,
+        'profile.managed_default_content_settings.javascript': 1,
+        'profile.managed_default_content_settings.cookies': 1
+    }
+    options.add_experimental_option('prefs', prefs)
+    options.add_experimental_option('excludeSwitches', ['enable-automation'])
+    options.add_experimental_option('useAutomationExtension', False)
     
     # Rotate user agents to avoid detection
     user_agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     ]
     options.add_argument(f'--user-agent={random.choice(user_agents)}')
     
     driver = webdriver.Chrome(options=options)
     driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
+    driver.set_script_timeout(30)
+    
     return driver
 
 def normalize_price(price_str):
@@ -99,16 +118,23 @@ def scrape_with_retry(scrape_func, query, max_retries=MAX_RETRIES):
     """Execute a scraping function with retries."""
     for attempt in range(max_retries):
         try:
+            # Add delay between retries to avoid rate limiting
+            if attempt > 0:
+                time.sleep(2 ** attempt)  # Exponential backoff
             return scrape_func(query)
         except TimeoutException:
             logger.warning(f"Timeout on attempt {attempt + 1} for {scrape_func.__name__}")
             if attempt == max_retries - 1:
                 logger.error(f"Max retries reached for {scrape_func.__name__}")
                 return []
-            time.sleep(2 ** attempt)  # Exponential backoff
+        except WebDriverException as e:
+            logger.error(f"WebDriver error in {scrape_func.__name__}: {str(e)}")
+            if attempt == max_retries - 1:
+                return []
         except Exception as e:
             logger.error(f"Error in {scrape_func.__name__}: {str(e)}")
-            return []
+            if attempt == max_retries - 1:
+                return []
     return []
 
 def scrape_all_sites(query):
@@ -125,6 +151,7 @@ def scrape_all_sites(query):
     ]
     
     all_products = []
+    errors = []
     
     with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_SCRAPERS) as executor:
         # Create futures for each scraping function
@@ -138,10 +165,17 @@ def scrape_all_sites(query):
             site_name = future_to_site[future]
             try:
                 products = future.result()
-                all_products.extend(products)
-                logger.info(f"Completed scraping {site_name} - found {len(products)} products")
+                if products:
+                    all_products.extend(products)
+                    logger.info(f"Completed scraping {site_name} - found {len(products)} products")
+                else:
+                    errors.append(f"No products found from {site_name}")
             except Exception as e:
                 logger.error(f"Error scraping {site_name}: {str(e)}")
+                errors.append(f"Failed to scrape {site_name}: {str(e)}")
+    
+    if errors:
+        logger.warning("Scraping completed with errors: %s", ", ".join(errors))
     
     return all_products
 
@@ -155,46 +189,87 @@ def scrape_meesho(query):
         search_url = f"https://www.meesho.com/search?q={query}"
         driver.get(search_url)
         
-        # Wait for product cards to load
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "div.ProductList__GridCol-sc-8lnc8o-0"))
-        )
+        # Wait for any product card to load
+        selectors = [
+            "[class*='ProductList__GridCol']",
+            "[class*='ProductCard']",
+            "[data-testid*='product']"
+        ]
+        
+        for selector in selectors:
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                )
+                break
+            except TimeoutException:
+                continue
         
         # Scroll down to load more products
-        driver.execute_script("window.scrollBy(0, 1000);")
-        time.sleep(2)
+        driver.execute_script("window.scrollBy(0, 800);")
+        time.sleep(SCROLL_WAIT_TIME)
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
-        # Find all product cards
-        product_cards = soup.find_all('div', class_=lambda c: c and 'ProductList__GridCol' in c)
+        # Try different selectors for product cards
+        product_cards = []
+        for selector in [
+            lambda s: s.find_all('div', class_=lambda c: c and 'ProductList__GridCol' in c),
+            lambda s: s.find_all('div', class_=lambda c: c and 'ProductCard' in c),
+            lambda s: s.find_all('div', attrs={'data-testid': lambda x: x and 'product' in x.lower()})
+        ]:
+            product_cards = selector(soup)
+            if product_cards:
+                break
         
-        for item in product_cards[:10]:  # Limit to first 10 products for performance
+        for item in product_cards[:10]:
             try:
-                name_elem = item.find('p', class_=lambda c: c and 'Text__StyledText' in c)
-                price_elem = item.find('h5', class_=lambda c: c and 'Text__StyledText' in c)
+                # Try multiple selectors for each element
+                name_elem = (
+                    item.find('p', class_=lambda c: c and 'Text__StyledText' in c) or
+                    item.find('div', class_=lambda c: c and 'ProductName' in c) or
+                    item.find(class_=lambda c: c and 'name' in c.lower())
+                )
+                
+                price_elem = (
+                    item.find('h5', class_=lambda c: c and 'Text__StyledText' in c) or
+                    item.find(class_=lambda c: c and 'price' in c.lower()) or
+                    item.find('span', class_=lambda c: c and 'rupee' in c.lower())
+                )
+                
                 image_elem = item.find('img')
-                rating_elem = item.find('span', class_=lambda c: c and 'Rating__StyledRating' in c)
+                rating_elem = (
+                    item.find('span', class_=lambda c: c and 'Rating' in c) or
+                    item.find(class_=lambda c: c and 'rating' in c.lower())
+                )
                 
-                name = name_elem.text if name_elem else 'N/A'
-                price = price_elem.text if price_elem else 'N/A'
+                # Find product link
+                link_elem = item.find('a', href=True)
+                product_url = link_elem['href'] if link_elem else None
+                if product_url and not product_url.startswith('http'):
+                    product_url = f"https://www.meesho.com{product_url}"
+                
+                if not name_elem or not price_elem:
+                    continue
+                
+                name = name_elem.text.strip() if name_elem else 'N/A'
+                price = price_elem.text.strip() if price_elem else 'N/A'
                 image = image_elem['src'] if image_elem and 'src' in image_elem.attrs else 'N/A'
-                rating = rating_elem.text if rating_elem else 'N/A'
-                
-                # Material is often not directly available on search results
-                material = 'N/A'
+                rating = rating_elem.text.strip() if rating_elem else 'N/A'
                 
                 normalized_price = normalize_price(price)
                 
-                products.append({
-                    'name': name,
-                    'price': normalized_price,
-                    'price_display': price,
-                    'image': image,
-                    'material': material,
-                    'rating': rating,
-                    'site': 'Meesho'
-                })
+                if name != 'N/A' and normalized_price is not None:
+                    products.append({
+                        'name': name,
+                        'price': normalized_price,
+                        'price_display': price,
+                        'image': image,
+                        'material': 'N/A',
+                        'rating': rating,
+                        'site': 'Meesho',
+                        'url': product_url
+                    })
             except Exception as e:
                 logger.error(f"Error parsing Meesho product: {e}")
                 continue
@@ -202,7 +277,10 @@ def scrape_meesho(query):
     except Exception as e:
         logger.error(f"Error scraping Meesho: {e}")
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass
         
     return products
 
@@ -213,64 +291,110 @@ def scrape_nykaa_fashion(query):
     products = []
     
     try:
-        search_url = f"https://www.nykaafashion.com/search?q={query}"
+        search_url = f"https://www.nykaafashion.com/search/?q={query}&type=text"
         driver.get(search_url)
         
-        # Wait for product cards to load
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.product-card"))
-            )
-            
-            # Scroll down to load more products
-            driver.execute_script("window.scrollBy(0, 1000);")
-            time.sleep(2)
-            
-            soup = BeautifulSoup(driver.page_source, 'html.parser')
-            
-            # Find all product cards
-            product_cards = soup.find_all('div', class_='product-card')
-            
-            for item in product_cards[:10]:  # Limit to first 10 products
-                try:
-                    name_elem = item.find('div', class_='product-name')
-                    brand_elem = item.find('div', class_='brand-name')
-                    price_elem = item.find('span', class_='primary-price')
-                    image_elem = item.find('img')
-                    
-                    brand = brand_elem.text.strip() if brand_elem else ''
-                    name = name_elem.text.strip() if name_elem else 'N/A'
-                    if brand and name != 'N/A':
-                        name = f"{brand} - {name}"
-                        
-                    price = price_elem.text.strip() if price_elem else 'N/A'
-                    image = image_elem['src'] if image_elem and 'src' in image_elem.attrs else 'N/A'
-                    
-                    # Material and rating often not available in search results
-                    material = 'N/A'
-                    rating = 'N/A'
-                    
-                    normalized_price = normalize_price(price)
-                    
+        # Wait for any product card to load with multiple selectors
+        selectors = [
+            "[data-testid='product-card']",
+            "div.product-card",
+            "div.plp-card"
+        ]
+        
+        for selector in selectors:
+            try:
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                )
+                break
+            except TimeoutException:
+                continue
+        
+        # Additional wait for dynamic content
+        time.sleep(3)
+        
+        # Scroll down to load more products
+        for _ in range(2):
+            driver.execute_script("window.scrollBy(0, 800);")
+            time.sleep(SCROLL_WAIT_TIME)
+        
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        
+        # Try different selectors for product cards
+        product_cards = []
+        for selector in [
+            lambda s: s.find_all('div', attrs={'data-testid': 'product-card'}),
+            lambda s: s.find_all('div', class_='product-card'),
+            lambda s: s.find_all('div', class_='plp-card')
+        ]:
+            product_cards = selector(soup)
+            if product_cards:
+                break
+        
+        for item in product_cards[:10]:
+            try:
+                # Try multiple selectors for each element
+                name_elem = (
+                    item.find('p', class_='product-name') or
+                    item.find('div', class_='product-name') or
+                    item.find(class_=lambda c: c and 'name' in c.lower())
+                )
+                
+                brand_elem = (
+                    item.find('p', class_='brand-name') or
+                    item.find('div', class_='brand-name') or
+                    item.find(class_=lambda c: c and 'brand' in c.lower())
+                )
+                
+                price_elem = (
+                    item.find('span', class_='primary-price') or
+                    item.find('span', class_='price') or
+                    item.find(class_=lambda c: c and 'price' in c.lower())
+                )
+                
+                image_elem = item.find('img')
+                
+                # Find product link
+                link_elem = item.find('a', href=True)
+                product_url = link_elem['href'] if link_elem else None
+                if product_url and not product_url.startswith('http'):
+                    product_url = f"https://www.nykaafashion.com{product_url}"
+                
+                if not name_elem or not price_elem:
+                    continue
+                
+                brand = brand_elem.text.strip() if brand_elem else ''
+                name = name_elem.text.strip() if name_elem else 'N/A'
+                if brand and name != 'N/A':
+                    name = f"{brand} - {name}"
+                
+                price = price_elem.text.strip() if price_elem else 'N/A'
+                image = image_elem['src'] if image_elem and 'src' in image_elem.attrs else 'N/A'
+                
+                normalized_price = normalize_price(price)
+                
+                if name != 'N/A' and normalized_price is not None:
                     products.append({
                         'name': name,
                         'price': normalized_price,
                         'price_display': price,
                         'image': image,
-                        'material': material,
-                        'rating': rating,
-                        'site': 'Nykaa Fashion'
+                        'material': 'N/A',
+                        'rating': 'N/A',
+                        'site': 'Nykaa Fashion',
+                        'url': product_url
                     })
-                except Exception as e:
-                    logger.error(f"Error parsing Nykaa Fashion product: {e}")
-                    continue
-        except TimeoutException:
-            logger.warning("Timeout waiting for Nykaa Fashion products to load")
-            
+            except Exception as e:
+                logger.error(f"Error parsing Nykaa Fashion product: {e}")
+                continue
+                
     except Exception as e:
         logger.error(f"Error scraping Nykaa Fashion: {e}")
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass
         
     return products
 
@@ -496,60 +620,105 @@ def scrape_ajio(query):
         search_url = f"https://www.ajio.com/search/?text={query}"
         driver.get(search_url)
         
-        # Wait for product cards to load
-        try:
-            WebDriverWait(driver, DEFAULT_TIMEOUT).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.item.rilrtl-products-list__item"))
-            )
-            
-            # Scroll down to load more products
-            driver.execute_script("window.scrollBy(0, 1000);")
+        # Wait for any product card to load with multiple selectors
+        selectors = [
+            "div.item.rilrtl-products-list__item",
+            "div.preview",
+            "div.product-card"
+        ]
+        
+        for selector in selectors:
+            try:
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                )
+                break
+            except TimeoutException:
+                continue
+        
+        # Additional wait for dynamic content
+        time.sleep(3)
+        
+        # Scroll down multiple times to load more products
+        for _ in range(3):
+            driver.execute_script("window.scrollBy(0, 800);")
             time.sleep(SCROLL_WAIT_TIME)
-            
-            soup = BeautifulSoup(driver.page_source, 'html.parser')
-            
-            # Find all product cards
-            product_cards = soup.find_all('div', class_='item rilrtl-products-list__item')
-            
-            for item in product_cards[:10]:
-                try:
-                    # Extract product details
-                    brand_elem = item.find('div', class_='brand')
-                    name_elem = item.find('div', class_='nameCls')
-                    price_elem = item.find('span', class_='price')
-                    image_elem = item.find('img')
-                    
-                    brand = brand_elem.text.strip() if brand_elem else ''
-                    product_name = name_elem.text.strip() if name_elem else 'N/A'
-                    name = f"{brand} - {product_name}" if brand else product_name
-                    price = price_elem.text.strip() if price_elem else 'N/A'
-                    image = image_elem['src'] if image_elem and 'src' in image_elem.attrs else 'N/A'
-                    
-                    # Material and rating often not available in search results
-                    material = 'N/A'
-                    rating = 'N/A'
-                    
-                    normalized_price = normalize_price(price)
-                    
+        
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        
+        # Try different selectors for product cards
+        product_cards = []
+        for selector in [
+            lambda s: s.find_all('div', class_='item rilrtl-products-list__item'),
+            lambda s: s.find_all('div', class_='preview'),
+            lambda s: s.find_all('div', class_='product-card')
+        ]:
+            product_cards = selector(soup)
+            if product_cards:
+                break
+        
+        for item in product_cards[:10]:
+            try:
+                # Try multiple selectors for each element
+                brand_elem = (
+                    item.find('div', class_='brand') or
+                    item.find('div', class_='brand-name') or
+                    item.find(class_=lambda c: c and 'brand' in c.lower())
+                )
+                
+                name_elem = (
+                    item.find('div', class_='nameCls') or
+                    item.find('div', class_='name') or
+                    item.find(class_=lambda c: c and 'name' in c.lower())
+                )
+                
+                price_elem = (
+                    item.find('span', class_='price') or
+                    item.find('div', class_='price') or
+                    item.find(class_=lambda c: c and 'price' in c.lower())
+                )
+                
+                image_elem = item.find('img')
+                
+                # Find product link
+                link_elem = item.find('a', href=True)
+                product_url = link_elem['href'] if link_elem else None
+                if product_url and not product_url.startswith('http'):
+                    product_url = f"https://www.ajio.com{product_url}"
+                
+                if not brand_elem or not price_elem:
+                    continue
+                
+                brand = brand_elem.text.strip() if brand_elem else ''
+                product_name = name_elem.text.strip() if name_elem else 'N/A'
+                name = f"{brand} - {product_name}" if brand else product_name
+                price = price_elem.text.strip() if price_elem else 'N/A'
+                image = image_elem['src'] if image_elem and 'src' in image_elem.attrs else 'N/A'
+                
+                normalized_price = normalize_price(price)
+                
+                if name != 'N/A' and normalized_price is not None:
                     products.append({
                         'name': name,
                         'price': normalized_price,
                         'price_display': price,
                         'image': image,
-                        'material': material,
-                        'rating': rating,
-                        'site': 'AJIO'
+                        'material': 'N/A',
+                        'rating': 'N/A',
+                        'site': 'AJIO',
+                        'url': product_url
                     })
-                except Exception as e:
-                    logger.error(f"Error parsing AJIO product: {e}")
-                    continue
-        except TimeoutException:
-            logger.warning("Timeout waiting for AJIO products to load")
-            
+            except Exception as e:
+                logger.error(f"Error parsing AJIO product: {e}")
+                continue
+                
     except Exception as e:
         logger.error(f"Error scraping AJIO: {e}")
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass
         
     return products
 
@@ -560,45 +729,93 @@ def scrape_flipkart(query):
     products = []
     
     try:
-        search_url = f"https://www.flipkart.com/search?q={query}"
+        search_url = f"https://www.flipkart.com/search?q={query}&type=product"
         driver.get(search_url)
         
-        # Wait for product cards to load
-        WebDriverWait(driver, DEFAULT_TIMEOUT).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "div._1AtVbE"))
-        )
+        # Wait for any product card to load with multiple selectors
+        selectors = [
+            "div[data-id]",
+            "div._1AtVbE",
+            "div._4ddWXP",
+            "div._2B099V"
+        ]
+        
+        for selector in selectors:
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                )
+                break
+            except TimeoutException:
+                continue
         
         # Scroll to load more products
-        for _ in range(3):
-            driver.execute_script("window.scrollBy(0, 1000);")
+        for _ in range(2):
+            driver.execute_script("window.scrollBy(0, 800);")
             time.sleep(SCROLL_WAIT_TIME)
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        product_cards = soup.find_all('div', class_='_1AtVbE')
+        
+        # Try different selectors for product cards
+        product_cards = []
+        for selector in ['div[data-id]', 'div._1AtVbE', 'div._4ddWXP', 'div._2B099V']:
+            product_cards = soup.find_all('div', attrs={'class': selector.replace('div.', '')} if '.' in selector else {'data-id': True})
+            if product_cards:
+                break
         
         for item in product_cards[:10]:
             try:
-                name_elem = item.find('div', class_='_4rR01T')
-                price_elem = item.find('div', class_='_30jeq3')
-                image_elem = item.find('img', class_='_396QI4')
-                rating_elem = item.find('div', class_='_3LWZlK')
+                # Try multiple selectors for each element
+                name_elem = (
+                    item.find('a', class_='IRpwTa') or
+                    item.find('a', class_='s1Q9rs') or
+                    item.find('div', class_='_4rR01T') or
+                    item.find('a', class_='_2rpwqI')
+                )
                 
-                name = name_elem.text if name_elem else 'N/A'
-                price = price_elem.text if price_elem else 'N/A'
+                price_elem = (
+                    item.find('div', class_='_30jeq3') or
+                    item.find('div', class_='_3I9_wc')
+                )
+                
+                image_elem = (
+                    item.find('img', class_='_2r_T1I') or
+                    item.find('img', class_='_396cs4') or
+                    item.find('img', class_='_2QN9ow')
+                )
+                
+                rating_elem = (
+                    item.find('div', class_='_3LWZlK') or
+                    item.find('div', class_='gUuXy-')
+                )
+                
+                # Find product link
+                link_elem = item.find('a', href=True)
+                product_url = link_elem['href'] if link_elem else None
+                if product_url and not product_url.startswith('http'):
+                    product_url = f"https://www.flipkart.com{product_url}"
+                
+                if not name_elem or not price_elem:
+                    continue
+                
+                name = name_elem.text.strip() if name_elem else 'N/A'
+                price = price_elem.text.strip() if price_elem else 'N/A'
                 image = image_elem['src'] if image_elem and 'src' in image_elem.attrs else 'N/A'
-                rating = rating_elem.text if rating_elem else 'N/A'
+                rating = rating_elem.text.strip() if rating_elem else 'N/A'
                 
                 normalized_price = normalize_price(price)
                 
-                products.append({
-                    'name': name,
-                    'price': normalized_price,
-                    'price_display': price,
-                    'image': image,
-                    'material': 'N/A',
-                    'rating': rating,
-                    'site': 'Flipkart'
-                })
+                if name != 'N/A' and normalized_price is not None:
+                    products.append({
+                        'name': name,
+                        'price': normalized_price,
+                        'price_display': price,
+                        'image': image,
+                        'material': 'N/A',
+                        'rating': rating,
+                        'site': 'Flipkart',
+                        'url': product_url
+                    })
             except Exception as e:
                 logger.error(f"Error parsing Flipkart product: {e}")
                 continue
@@ -606,7 +823,10 @@ def scrape_flipkart(query):
     except Exception as e:
         logger.error(f"Error scraping Flipkart: {e}")
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass
         
     return products
 

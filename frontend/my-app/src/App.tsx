@@ -9,6 +9,7 @@ interface Product {
   material: string;
   rating: string;
   site: string;
+  url: string | null;
 }
 
 interface SearchResponse {
@@ -200,7 +201,7 @@ function App() {
             </div>
           </div>
           
-          <div className="filter-group">
+          <div className="filter-group reset-group">
             <button onClick={resetFilters} className="reset-button">
               Reset Filters
             </button>
@@ -277,7 +278,19 @@ function App() {
                         </span>
                       </p>
                       <div className="product-link">
-                        <button className="view-button">View Product</button>
+                        <a 
+                          href={product.url || '#'} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="view-button"
+                          onClick={(e) => {
+                            if (!product.url) {
+                              e.preventDefault();
+                            }
+                          }}
+                        >
+                          View Product
+                        </a>
                       </div>
                     </div>
                   </div>

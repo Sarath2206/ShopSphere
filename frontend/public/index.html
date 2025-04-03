@@ -29,28 +29,73 @@
                             
                             <div class="mb-3">
                                 <label class="form-label">Select Sites to Compare:</label>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="meesho" id="meesho-check" checked>
-                                    <label class="form-check-label" for="meesho-check">
-                                        Meesho
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="nykaa" id="nykaa-check" checked>
-                                    <label class="form-check-label" for="nykaa-check">
-                                        Nykaa Fashion
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="fabindia" id="fabindia-check" checked>
-                                    <label class="form-check-label" for="fabindia-check">
-                                        FabIndia
-                                    </label>
+                                <div class="filter-container">
+                                    <div class="filter-group">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="meesho" id="meesho-check" checked>
+                                            <label class="form-check-label" for="meesho-check">
+                                                Meesho
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="nykaa" id="nykaa-check" checked>
+                                            <label class="form-check-label" for="nykaa-check">
+                                                Nykaa Fashion
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="fabindia" id="fabindia-check" checked>
+                                            <label class="form-check-label" for="fabindia-check">
+                                                FabIndia
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             
                             <button type="submit" class="btn btn-primary">Compare Products</button>
                         </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h2>Filters</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="filters-grid">
+                            <div class="filter-item">
+                                <label class="form-label">Source</label>
+                                <select class="form-select" id="source-filter">
+                                    <option value="all">All Sources</option>
+                                    <option value="meesho">Meesho</option>
+                                    <option value="nykaa">Nykaa Fashion</option>
+                                    <option value="fabindia">FabIndia</option>
+                                </select>
+                            </div>
+                            
+                            <div class="filter-item">
+                                <label class="form-label">Min Rating</label>
+                                <select class="form-select" id="rating-filter">
+                                    <option value="any">Any Rating</option>
+                                    <option value="4">4+ Stars</option>
+                                    <option value="3">3+ Stars</option>
+                                    <option value="2">2+ Stars</option>
+                                </select>
+                            </div>
+                            
+                            <div class="filter-item price-range">
+                                <label class="form-label">Price Range</label>
+                                <div class="price-inputs">
+                                    <input type="number" class="form-control" id="min-price" placeholder="Min Price">
+                                    <input type="number" class="form-control" id="max-price" placeholder="Max Price">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
