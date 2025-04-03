@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShopSphere - Clothing Search</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #f5f5f5;
+            --accent-color: #ff6b6b;
+            --text-color: #333;
+            --border-color: #ddd;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--secondary-color);
+            background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 1rem 0;
+        }
+
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Clothing animation */
+        .clothing-animation {
+            display: inline-block;
+            margin-left: 10px;
+            position: relative;
+        }
+        
+        .clothing-item {
+            font-size: 1.2rem;
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            animation: clothingCycle 10s infinite;
+        }
+        
+        .clothing-item:nth-child(1) { animation-delay: 0s; }
+        .clothing-item:nth-child(2) { animation-delay: 2s; }
+        .clothing-item:nth-child(3) { animation-delay: 4s; }
+        .clothing-item:nth-child(4) { animation-delay: 6s; }
+        .clothing-item:nth-child(5) { animation-delay: 8s; }
+        
+        @keyframes clothingCycle {
+            0%, 15% { opacity: 0; transform: translateY(10px); }
+            20%, 35% { opacity: 1; transform: translateY(0); }
+            40%, 100% { opacity: 0; transform: translateY(-10px); }
+        }
+
+        .search-container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            margin: 2rem 0;
+            background-image: url('https://images.unsplash.com/photo-1490481651871-ab68de25d43d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80');
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        
+        .search-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.85);
+            border-radius: 10px;
+        }
+        
+        .search-container form {
+            position: relative;
+            z-index: 1;
+        }
+
+        .search-input {
+            border: 2px solid var(--border-color);
+            border-radius: 5px;
+            padding: 0.75rem 1rem;
+            font-size: 1.1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: none;
+        }
+
+        .search-button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            transition: background-color 0.3s ease;
+        }
+
+        .search-button:hover {
+            background-color: #357abd;
+        }
+
+        .filters {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .filter-group {
+            margin-bottom: 1rem;
+        }
+
+        .filter-label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
+        }
+
+        .product-card {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .product-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 10px 10px 0 0;
+        }
+
+        .product-details {
+            padding: 1rem;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .product-name {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
+        }
+
+        .product-price {
+            font-size: 1.2rem;
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .product-rating {
+            color: #ffc107;
+            margin-bottom: 0.5rem;
+        }
+
+        .product-site {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .product-material {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .product-link {
+            margin-top: auto;
+            text-align: center;
+        }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            margin: 2rem 0;
+        }
+
+        .error-message {
+            display: none;
+            color: var(--accent-color);
+            text-align: center;
+            margin: 1rem 0;
+            padding: 1rem;
+            background-color: #fff3f3;
+            border-radius: 5px;
+        }
+
+        .no-results {
+            display: none;
+            text-align: center;
+            margin: 2rem 0;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .results-summary {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .site-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-right: 0.5rem;
+        }
+
+        .site-myntra { background-color: #ff3f6c; color: white; }
+        .site-meesho { background-color: #f43397; color: white; }
+        .site-nykaa { background-color: #ff527b; color: white; }
+        .site-fabindia { background-color: #e67e22; color: white; }
+        .site-ajio { background-color: #2d3436; color: white; }
+        .site-flipkart { background-color: #2874f0; color: white; }
+        .site-amazon { background-color: #232f3e; color: white; }
+        .site-tatacliq { background-color: #1a1a1a; color: white; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                ShopSphere
+                <div class="clothing-animation">
+                    <span class="clothing-item">👕</span>
+                    <span class="clothing-item">👖</span>
+                    <span class="clothing-item">👗</span>
+                    <span class="clothing-item">🧥</span>
+                    <span class="clothing-item">👟</span>
+                </div>
+            </a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="search-container">
+            <form id="searchForm" class="row g-3">
+                <div class="col-md-8">
+                    <input type="text" class="form-control search-input" id="searchQuery" placeholder="Search for clothing items..." required>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn search-button w-100">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="filters">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="filter-group">
+                        <label class="filter-label">Source</label>
+                        <select class="form-select" id="sourceFilter">
+                            <option value="all">All Sources</option>
+                            <option value="myntra">Myntra</option>
+                            <option value="meesho">Meesho</option>
+                            <option value="nykaa">Nykaa Fashion</option>
+                            <option value="fabindia">FabIndia</option>
+                            <option value="ajio">AJIO</option>
+                            <option value="flipkart">Flipkart</option>
+                            <option value="amazon">Amazon</option>
+                            <option value="tatacliq">Tata CLiQ</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="filter-group">
+                        <label class="filter-label">Gender</label>
+                        <select class="form-select" id="genderFilter">
+                            <option value="all">All</option>
+                            <option value="men">Men</option>
+                            <option value="women">Women</option>
+                            <option value="unisex">Unisex</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="filter-group">
+                        <label class="filter-label">Size</label>
+                        <select class="form-select" id="sizeFilter">
+                            <option value="all">All Sizes</option>
+                            <option value="XS">XS</option>
+                            <option value="S">S</option>
+                            <option value="M">M</option>
+                            <option value="L">L</option>
+                            <option value="XL">XL</option>
+                            <option value="XXL">XXL</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="filter-group">
+                        <label class="filter-label">Min Rating</label>
+                        <select class="form-select" id="ratingFilter">
+                            <option value="0">Any Rating</option>
+                            <option value="3">3+ Stars</option>
+                            <option value="4">4+ Stars</option>
+                            <option value="4.5">4.5+ Stars</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <div class="filter-group">
+                        <label class="filter-label">Price Range</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="minPrice" placeholder="Min Price" min="0">
+                            <input type="number" class="form-control" id="maxPrice" placeholder="Max Price" min="0">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="filter-group">
+                        <label class="filter-label">&nbsp;</label>
+                        <button class="btn btn-secondary w-100" id="resetFilters">
+                            <i class="fas fa-undo"></i> Reset Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Searching across multiple stores...</p>
+        </div>
+
+        <div class="error-message"></div>
+
+        <div class="no-results">
+            <i class="fas fa-search fa-3x mb-3"></i>
+            <h4>No results found</h4>
+            <p>Try adjusting your search terms or filters</p>
+        </div>
+
+        <div class="results-summary" style="display: none;">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Search Results</h5>
+                    <p id="resultCount">0 products found</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <p id="searchTime">Search completed in 0 seconds</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row" id="results"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const query = document.getElementById('searchQuery').value;
+            const source = document.getElementById('sourceFilter').value;
+            const gender = document.getElementById('genderFilter').value;
+            const size = document.getElementById('sizeFilter').value;
+            const minRating = document.getElementById('ratingFilter').value;
+            const minPrice = document.getElementById('minPrice').value;
+            const maxPrice = document.getElementById('maxPrice').value || '999999';
+            
+            // Show loading spinner
+            document.querySelector('.loading-spinner').style.display = 'block';
+            document.querySelector('.error-message').style.display = 'none';
+            document.querySelector('.no-results').style.display = 'none';
+            document.getElementById('results').innerHTML = '';
+            document.querySelector('.results-summary').style.display = 'none';
+            
+            // Construct URL with parameters
+            const params = new URLSearchParams({
+                query: query,
+                sites: source !== 'all' ? source : '',
+                min_rating: minRating,
+                min_price: minPrice,
+                max_price: maxPrice
+            });
+            
+            // Make API request
+            fetch(`/api/search/?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Hide loading spinner
+                    document.querySelector('.loading-spinner').style.display = 'none';
+                    
+                    if (data.error) {
+                        // Show error message
+                        const errorMessage = document.querySelector('.error-message');
+                        errorMessage.textContent = data.error;
+                        errorMessage.style.display = 'block';
+                        return;
+                    }
+                    
+                    if (data.results.length === 0) {
+                        // Show no results message
+                        document.querySelector('.no-results').style.display = 'block';
+                        return;
+                    }
+                    
+                    // Update results summary
+                    const summary = document.querySelector('.results-summary');
+                    document.getElementById('resultCount').textContent = `${data.total_results} products found`;
+                    document.getElementById('searchTime').textContent = `Search completed in ${data.execution_time} seconds`;
+                    summary.style.display = 'block';
+                    
+                    // Display results
+                    const resultsContainer = document.getElementById('results');
+                    
+                    data.results.forEach(product => {
+                        const card = document.createElement('div');
+                        card.className = 'col-md-4 mb-4';
+                        
+                        const rating = product.rating && product.rating !== 'N/A' ? `
+                            <div class="product-rating">
+                                <i class="fas fa-star"></i> ${product.rating}
+                            </div>` : '';
+                        
+                        const material = product.material && product.material !== 'N/A' ? `
+                            <div class="product-material">
+                                Material: ${product.material}
+                            </div>` : '';
+                        
+                        const brand = product.name.includes('-') ? 
+                            `<div class="product-brand">${product.name.split('-')[0].trim()}</div>` : '';
+                        
+                        card.innerHTML = `
+                            <div class="product-card">
+                                <img src="${product.image}" alt="${product.name}" class="product-image" onerror="this.src='https://via.placeholder.com/200x200?text=No+Image'">
+                                <div class="product-details">
+                                    <div class="product-name">${product.name}</div>
+                                    <div class="product-price">${product.price_display}</div>
+                                    ${rating}
+                                    ${material}
+                                    ${brand}
+                                    <div class="product-site">
+                                        <span class="site-badge site-${product.site.toLowerCase().replace(/\s+/g, '')}">${product.site}</span>
+                                    </div>
+                                    <div class="product-link mt-2">
+                                        <a href="#" onclick="alert('View product on ${product.site}')" class="btn btn-primary">View Product</a>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        resultsContainer.appendChild(card);
+                    });
+                })
+                .catch(error => {
+                    // Hide loading spinner and show error message
+                    document.querySelector('.loading-spinner').style.display = 'none';
+                    const errorMessage = document.querySelector('.error-message');
+                    errorMessage.textContent = 'An error occurred while fetching results. Please try again.';
+                    errorMessage.style.display = 'block';
+                    console.error('Error:', error);
+                });
+        });
+
+        // Reset filters button
+        document.getElementById('resetFilters').addEventListener('click', function() {
+            document.getElementById('sourceFilter').value = 'all';
+            document.getElementById('genderFilter').value = 'all';
+            document.getElementById('sizeFilter').value = 'all';
+            document.getElementById('ratingFilter').value = '0';
+            document.getElementById('minPrice').value = '';
+            document.getElementById('maxPrice').value = '';
+        });
+    </script>
+</body>
+</html>

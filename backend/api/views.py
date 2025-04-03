@@ -18,6 +18,9 @@ def search(request):
     - query: The search term (required)
     - sites: Comma-separated list of sites to search (optional, defaults to all)
     - timeout: Maximum time to wait for results in seconds (optional, defaults to 60)
+    - min_rating: Minimum rating filter (optional)
+    - min_price: Minimum price filter (optional)
+    - max_price: Maximum price filter (optional)
     """
     query = request.GET.get('query', '')
     if not query:
@@ -25,6 +28,9 @@ def search(request):
     
     sites = request.GET.get('sites', '')
     timeout = int(request.GET.get('timeout', 60))
+    min_rating = float(request.GET.get('min_rating', 0))
+    min_price = float(request.GET.get('min_price', 0))
+    max_price = float(request.GET.get('max_price', float('inf')))
     
     try:
         start_time = time.time()
@@ -69,6 +75,24 @@ def search(request):
             product for product in results 
             if product.get('name') != 'N/A' and product.get('price') is not None
         ]
+        
+        # Apply filters
+        filtered_results = [
+            product for product in filtered_results
+            if (product.get('price', 0) >= min_price and 
+                product.get('price', float('inf')) <= max_price)
+        ]
+        
+        # Apply rating filter if specified
+        if min_rating > 0:
+            filtered_results = [
+                product for product in filtered_results
+                if (product.get('rating') and 
+                    product.get('rating') != 'N/A' and
+                    (float(product.get('rating').split('|')[0] if isinstance(product.get('rating'), str) and '|' in product.get('rating')
+                    else product.get('rating').split()[0] if isinstance(product.get('rating'), str)
+                    else product.get('rating', 0)) >= min_rating))
+            ]
         
         # Sort by price (lowest first)
         sorted_results = sorted(
