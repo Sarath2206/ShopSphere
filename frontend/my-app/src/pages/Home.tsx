@@ -11,10 +11,12 @@ interface User {
 interface SearchResult {
   name: string;
   price: number;
-  image_url: string;
-  product_url: string;
-  source_website: string;
+  price_display?: string;
+  image: string;
+  url: string;
+  site: string;
   rating?: string;
+  material?: string;
 }
 
 const Home: React.FC = () => {
@@ -57,6 +59,7 @@ const Home: React.FC = () => {
       }
 
       const data = await response.json();
+      console.log('Search results:', data);
       setSearchResults(data.results || []);
 
       // Save search to history if user is logged in
@@ -149,13 +152,21 @@ const Home: React.FC = () => {
             <div className="results-grid">
               {searchResults.map((item, index) => (
                 <div key={index} className="result-card">
-                  <img src={item.image_url} alt={item.name} className="result-image" />
+                  <img 
+                    src={item.image !== 'N/A' ? item.image : '/placeholder-image.svg'} 
+                    alt={item.name} 
+                    className="result-image"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = '/placeholder-image.svg';
+                    }}
+                  />
                   <div className="result-details">
                     <h3>{item.name}</h3>
-                    <p className="price">₹{item.price}</p>
-                    {item.rating && <p className="rating">Rating: {item.rating}</p>}
-                    <p className="source">From: {item.source_website}</p>
-                    <a href={item.product_url} target="_blank" rel="noopener noreferrer" className="view-button">
+                    <p className="price">₹{item.price_display || item.price}</p>
+                    {item.rating && item.rating !== 'N/A' && <p className="rating">Rating: {item.rating}</p>}
+                    <p className="source">From: {item.site}</p>
+                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="view-button">
                       View Product
                     </a>
                   </div>
