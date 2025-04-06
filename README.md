@@ -23,11 +23,17 @@ A cross-platform web application that scrapes clothing data from multiple e-comm
 clothing/
 ├── backend/             # Django backend
 │   ├── api/             # API app
+|   ├── custom_auth/     # authentication
 │   ├── scraper/         # Scraping functionality
 │   ├── backend/         # Django project settings
-│   └── requirements.txt # Python dependencies
+│   ├── templates/       
+│   ├── db.sqlite3       # database
+│   ├── requirements.txt # Python dependencies
+│   └── manage.py        # Manage all migrations
 ├── frontend/            # Frontend files
 │   ├── public/          # Public HTML files
+│   ├── my-app/          # App frontend
+│   ├── node_modules/    # modules
 │   └── src/             # JavaScript and CSS
 └── run.sh               # Script to run the application
 ```
