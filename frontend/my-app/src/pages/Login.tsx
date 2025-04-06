@@ -1,82 +1,75 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-    Container,
-    Paper,
-    TextField,
-    Button,
-    Typography,
-    Box,
-    Alert,
-} from '@mui/material';
-import { useAuth } from '../context/AuthContext';
+import '../styles/Auth.css';
 
 const Login: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
-    const { login } = useAuth();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await login(email, password);
-            navigate('/');
+            const response = await fetch('http://localhost:8000/api/auth/login/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password }),
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                navigate('/home');
+            } else {
+                setError(data.error || 'Login failed');
+            }
         } catch (err) {
-            setError('Invalid email or password');
+            setError('An error occurred during login');
         }
     };
 
     return (
-        <Container maxWidth="sm">
-            <Box sx={{ mt: 8 }}>
-                <Paper elevation={3} sx={{ p: 4 }}>
-                    <Typography variant="h4" component="h1" gutterBottom align="center">
-                        Login
-                    </Typography>
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {error}
-                        </Alert>
-                    )}
-                    <form onSubmit={handleSubmit}>
-                        <TextField
-                            label="Email"
+        <div className="auth-container">
+            <div className="auth-card">
+                <h2 className="auth-title">Welcome Back</h2>
+                <form onSubmit={handleSubmit} className="auth-form">
+                    <div className="form-group">
+                        <input
                             type="email"
-                            fullWidth
-                            margin="normal"
+                            placeholder="Email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
+                            className="auth-input"
                         />
-                        <TextField
-                            label="Password"
+                    </div>
+                    <div className="form-group">
+                        <input
                             type="password"
-                            fullWidth
-                            margin="normal"
+                            placeholder="Password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
+                            className="auth-input"
                         />
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            fullWidth
-                            sx={{ mt: 3, mb: 2 }}
-                        >
-                            Login
-                        </Button>
-                        <Button
-                            fullWidth
-                            onClick={() => navigate('/register')}
-                        >
-                            Don't have an account? Register
-                        </Button>
-                    </form>
-                </Paper>
-            </Box>
-        </Container>
+                    </div>
+                    {error && <div className="error-message">{error}</div>}
+                    <button type="submit" className="auth-button">
+                        Login
+                    </button>
+                </form>
+                <p className="auth-switch">
+                    Don't have an account?{' '}
+                    <span onClick={() => navigate('/register')} className="auth-link">
+                        Register
+                    </span>
+                </p>
+            </div>
+        </div>
     );
 };
 
